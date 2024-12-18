@@ -1,4 +1,4 @@
-// marten_pro.h
+// zeitview.h
 #ifndef MARTEN_LIBRARY
 #define MARTEN_LIBRARY
 

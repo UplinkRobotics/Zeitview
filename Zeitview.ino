@@ -1,4 +1,4 @@
-// Uplinkrobotics PCB Rev A testing code
+// Uplinkrobotics PCB Zeitview Code V1
 //
 //
 // Copyright © 2024 UplinkRobotics LLC
@@ -66,7 +66,7 @@ bool headlights = 0;
 const int deadzone_thr = 6;
 const int deadzone_str = 6;
 
-int loop_timer = 0; // timer for main loop execution
+unsigned long loop_timer = 0; // timer for main loop execution
 
 // wifi update variables
 int update_counter = 0;

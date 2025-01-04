@@ -34,9 +34,10 @@
 #define DEFAULT (HIGH_VAL + LOW_VAL)/2 // get the middle value
 
 // GPIO Pin Assignments
-#define CAM_CTRL_IO 19 // camera select
 #define GIMBAL_SERVO_IO 18 // gimbal servo
 #define GIMBAL_SERVO2_IO 5 // gimbal servo 2
+#define CAM_CTRL_IO 19 // camera select
+#define VTX_CTRL_IO 23
 
 #define LED1_IO 4   // led channel 1 - Lower right, tied to button
 #define LED2_IO 0   // led channel 2

@@ -11,7 +11,6 @@
 #include "driver/ledc.h"
 #include "motor_library.h"
 #include "zeitview.h"
-#include "ota_updates.h"
 
 /***************************************************************************************************/
 
@@ -26,9 +25,10 @@ bool lostFrame;
 
 Servo ext1;  // create servo object to external peripherals
 Servo ext2;
+Servo ext3;
+Servo ext4;
 
 Motors mot; // initialize motors
-Wifi wifi; // initialize wifi code
 
 // Radio channel integers - raw values from the radio
 int ch1 = DEFAULT; // set to default value so crawler doesnt move on startup
@@ -40,20 +40,14 @@ int ch5, ch6, ch7, ch8, ch9, ch10, ch11, ch12;
 // Smoothed values to reduce current draw and make operation smoother
 float thr_smoothed = 0;
 float str_smoothed = 0;
-float bat_smoothed = 11; // start at a nominal battery voltage
 
 // Smoothing alpha values
 float thr_alpha = 0.98;
 float str_alpha = 0.96;
-const float battery_alpha = 0.99;
 
 // Radio channel values mapped into useful numbers
-float thr, str, ext1float, ext2float;
+float thr, str, ext1float, ext2float, ext3float, ext4float;
 int led2;
- 
-// Sensor values
-int voltage_read = 0;
-double battery_voltage = 0.0;
 
 //LED array values
 // led_array[8] = {orange, red, yellow, green, blue, red(rgb), green(rgb), blue(rgb)}
@@ -67,12 +61,6 @@ const int deadzone_thr = 6;
 const int deadzone_str = 6;
 
 unsigned long loop_timer = 0; // timer for main loop execution
-
-// wifi update variables
-int update_counter = 0;
-int update_timer = millis();
-int last_op_mode = 0; // integer for enabling wifi updates
-int operating_mode = 0; // used to switch to Wifi mode
 
 // Setup function that runs once as the ESP starts up
 // ===================================================================================================
@@ -90,6 +78,10 @@ void setup() {
   ext1.writeMicroseconds(0); // default position
   ext2.attach(GIMBAL_SERVO2_IO); // attaches servo pin
   ext2.writeMicroseconds(0); // default position
+  ext3.attach(CAM_CTRL_IO); // attaches servo pin
+  ext3.writeMicroseconds(0); // default position
+  ext4.attach(VTX_CTRL_IO); // attaches servo pin
+  ext4.writeMicroseconds(0); // default position
 
   pinMode(LEDARRAY_CLK_IO, OUTPUT); // on board indicator LEDs
   pinMode(LEDARRAY_DATA_IO, OUTPUT);
@@ -109,7 +101,6 @@ void loop() {
   read_receiver(&ch1, &ch2, &ch3, &ch4, &ch5, &ch6, &ch7, &ch8, &ch9, &ch10, &ch11, &ch12); // read values from the Receiver
   
   // Read sensor values
-  voltage_read = analogRead(BATTERY_VOLT_IO);
   mot.sample_values();
   mot.overcurrent_right(); // perform overcurrent testing
   mot.overcurrent_left();
@@ -120,67 +111,16 @@ void loop() {
 
   thr = constrain(map(ch1, LOW_VAL, HIGH_VAL, -105, 105), -100, 100); // throttle
   str = constrain(map(ch2, LOW_VAL, HIGH_VAL, -105, 105), -100, 100); // steering 
-  ext1float = constrain(map(ch3, LOW_VAL, HIGH_VAL, 500, 2500), 500, 2500); // external control 1
-  ext2float = constrain(map(ch4, LOW_VAL, HIGH_VAL, 500, 2500), 500, 2500); // external control 2
   // headlight toggle
   headlights = constrain(map(ch5, LOW_VAL, HIGH_VAL, -1, 3), 0, 1); // headlight toggle
-
-  // operating mode switch for the WiFi mode
-  operating_mode = constrain(map(ch7, LOW_VAL, HIGH_VAL, -1, 3), 0, 2);   // switch at least three times quickly to go into wifi mode
+  ext1float = constrain(map(ch6, LOW_VAL, HIGH_VAL, 500, 2500), 500, 2500); // external control 1
+  ext2float = constrain(map(ch7, LOW_VAL, HIGH_VAL, 500, 2500), 500, 2500); // external control 2
+  ext3float = constrain(map(ch8, LOW_VAL, HIGH_VAL, 500, 2500), 500, 2500); // external control 1
+  ext4float = constrain(map(ch9, LOW_VAL, HIGH_VAL, 500, 2500), 500, 2500); // external control 2
 
   // smooth out throttle, steering, and servo
   thr_smoothed = (thr_smoothed * thr_alpha) + (thr * (1 - thr_alpha));
   str_smoothed = (str_smoothed * str_alpha) + (str * (1 - str_alpha));
- 
-  // Calculate the voltage based on the analog value
-  battery_voltage = (voltage_read / 319.5) + 1.6;
-  bat_smoothed = (bat_smoothed * battery_alpha) + (battery_voltage * (1 - battery_alpha));
-
-// WIFI CODE
-// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-// Safeguards to make wifi mode harder to stumble into
-  if(update_counter > 0){ // check if the counter needs cleared
-    if(update_timer + 1000 < millis()){
-      update_counter = 0;
-    }
-  }
-  // check for a full switch flip
-  if(last_op_mode == 0 && operating_mode == 2 || last_op_mode == 2 && operating_mode == 0){
-    update_counter++;
-    update_timer = millis(); // timer till the counter resets
-    last_op_mode = operating_mode;
-  }
-  // Over-The-Air Update code
-  if(update_counter == 3){   // WiFi and update mode
-    update_counter = 0;
-    last_op_mode = operating_mode;
-    mot.left_motors(0); // set channels to default to ensure the crawler stops in place
-    mot.right_motors(0); 
-    thr_smoothed = 0;   // zero these values so it doesn't start rolling after leaving the loop
-    str_smoothed = 0;
-
-    led_array[4] = 1;   // Turn on blue LED
-    ledarray_set(led_array); 
-
-    wifi.beginwifi();   // Turn on Wifi
-    Serial.println("Waiting for connection with Mobile device...");
-    update_timer = millis(); 
-    while (last_op_mode == operating_mode){
-      // if the mode changes, end the loop
-      read_receiver(&ch1, &ch2, &ch3, &ch4, &ch5, &ch6, &ch7, &ch8, &ch9, &ch10, &ch11, &ch12);
-      operating_mode = constrain(map(ch7, 172, 1811, -1, 3), 0, 2);    // 0 = normal operation, 2 = WiFi and update mode
-      if(((update_timer + 3000) > millis()) && (operating_mode != 1)){ // 3 second timeout before you can leave wifi mode
-        last_op_mode = operating_mode; // stay in this loop
-      }
-      if(operating_mode == 1) operating_mode = last_op_mode; // ignore middle switch state
-      wifi.start_transmission(); // check for connection for transmission
-      delay(200); // slow loop down
-    }
-    Serial.println("Shutting down Wifi");
-    wifi.endwifi(); // turn off wifi
-    led_array[4] = 0; // turn off blue LED
-    ledarray_set(led_array); 
-  }
 
   // ACTION TAKEN BASED VALUES / WRITE TO OUTPUTS
   // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -188,6 +128,8 @@ void loop() {
   // set the gimbal location
   ext1.writeMicroseconds(ext1float);
   ext2.writeMicroseconds(ext2float);
+  ext3.writeMicroseconds(ext3float);
+  ext4.writeMicroseconds(ext4float);
 
   //logarithmic lighting
   led2 = log_lighting(ch8);
@@ -196,10 +138,6 @@ void loop() {
   if(headlights) ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, led2); // set the duty cycle for led channel 2
   else ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, 0); // Else headlights are off
   ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1); // apply the duty cycle
-
-  // If battery is close to dead turn on red led
-  if(battery_voltage < 9.9) led_array[1] = 1;
-  else led_array[1] = 0;
 
   // if fault from motor drivers turn on yellow led
   if(mot.fault == 0) led_array[0] = 1;
@@ -260,7 +198,7 @@ void read_receiver(int *ch1, int *ch2, int *ch3, int *ch4, int *ch5, int *ch6, i
     *ch12 = channels[11];
 
     // sanitize values, usually only matters on controller turn off
-    if(failSafe){
+    if(failSafe || lostFrame){
       *ch1 = DEFAULT;
       *ch2 = DEFAULT;
       *ch3 = LOW_VAL;

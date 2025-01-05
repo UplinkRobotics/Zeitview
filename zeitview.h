@@ -27,8 +27,8 @@
 #define STR_CH 3
 #define SER_CH 1
 #define EXT_CH 0
-#define LOW_VAL 172
-#define HIGH_VAL 1811
+#define LOW_VAL 272
+#define HIGH_VAL 1712
 #define GIMBAL_DEFAULT 991
 
 #define DEFAULT (HIGH_VAL + LOW_VAL)/2 // get the middle value

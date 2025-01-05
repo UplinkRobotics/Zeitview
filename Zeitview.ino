@@ -53,9 +53,6 @@ int led2;
 // led_array[8] = {orange, red, yellow, green, blue, red(rgb), green(rgb), blue(rgb)}
 int led_array[8] = {0,0,0,0,0,0,0,0};
 
-// Headlight boolean
-bool headlights = 0;
-
 // Region around neutral where the sticks don't give an output (no motion)
 const int deadzone_thr = 6;
 const int deadzone_str = 6;
@@ -112,11 +109,18 @@ void loop() {
   thr = constrain(map(ch1, LOW_VAL, HIGH_VAL, -105, 105), -100, 100); // throttle
   str = constrain(map(ch2, LOW_VAL, HIGH_VAL, -105, 105), -100, 100); // steering 
   // headlight toggle
-  headlights = constrain(map(ch5, LOW_VAL, HIGH_VAL, -1, 3), 0, 1); // headlight toggle
-  ext1float = constrain(map(ch6, LOW_VAL, HIGH_VAL, 500, 2500), 500, 2500); // external control 1
-  ext2float = constrain(map(ch7, LOW_VAL, HIGH_VAL, 500, 2500), 500, 2500); // external control 2
-  ext3float = constrain(map(ch8, LOW_VAL, HIGH_VAL, 500, 2500), 500, 2500); // external control 1
-  ext4float = constrain(map(ch9, LOW_VAL, HIGH_VAL, 500, 2500), 500, 2500); // external control 2
+  ext1float = constrain(map(ch6, LOW_VAL, HIGH_VAL, 900, 2100), 1000, 2000); // external control 1
+  ext2float = constrain(map(ch7, LOW_VAL, HIGH_VAL, 900, 2100), 1000, 2000); // external control 2
+  ext3float = constrain(map(ch8, LOW_VAL, HIGH_VAL, 900, 2100), 1000, 2000); // external control 1
+  ext4float = constrain(map(ch9, LOW_VAL, HIGH_VAL, 900, 2100), 1000, 2000); // external control 2
+
+  //logarithmic lighting
+  led2 = log_lighting(ch5);
+  //Serial.println(ch6);
+  //Serial.println(ext1float);
+  // control the LEDs
+  ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, led2); // set the duty cycle for led channel 2
+  ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1); // apply the duty cycle
 
   // smooth out throttle, steering, and servo
   thr_smoothed = (thr_smoothed * thr_alpha) + (thr * (1 - thr_alpha));
@@ -130,14 +134,6 @@ void loop() {
   ext2.writeMicroseconds(ext2float);
   ext3.writeMicroseconds(ext3float);
   ext4.writeMicroseconds(ext4float);
-
-  //logarithmic lighting
-  led2 = log_lighting(ch8);
-
-  // control the LEDs. Had to inverse the values for some reason.
-  if(headlights) ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, led2); // set the duty cycle for led channel 2
-  else ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, 0); // Else headlights are off
-  ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1); // apply the duty cycle
 
   // if fault from motor drivers turn on yellow led
   if(mot.fault == 0) led_array[0] = 1;
@@ -174,6 +170,7 @@ void ledarray_set(int leds[]){
 
 // Function to apply logarithmic lighting to the LEDs
 int log_lighting(int ch){
+  ch -= 100; // TODO: fix for SIYI
   if(ch < 173) return 0; // cut off anything below this point, don't waste current when LEDs aren't on
   float temp = ch * 0.00295; //lot of magic values specifically for SBUS
   temp = (exp(temp) + 25 + 0.154 * ch) * 8;

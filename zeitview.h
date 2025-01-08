@@ -37,7 +37,9 @@
 #define GIMBAL_SERVO_IO 18 // gimbal servo
 #define GIMBAL_SERVO2_IO 5 // gimbal servo 2
 #define CAM_CTRL_IO 19 // camera select
-#define VTX_CTRL_IO 23
+#define VTX_CTRL_IO 23 // vtx control
+#define DB_SDA_IO 21 // I2C SDA on the DaughterBoard Header
+#define DB_SCL_IO 22 // I2C SCL on the DaughterBoard Header
 
 #define LED1_IO 4   // led channel 1 - Lower right, tied to button
 #define LED2_IO 0   // led channel 2

@@ -23,10 +23,12 @@ uint16_t channels[16];
 bool failSafe;
 bool lostFrame;
 
-Servo ext1;  // create servo object to external peripherals
+Servo ext1;  // create servo objects for external peripherals
 Servo ext2;
 Servo ext3;
 Servo ext4;
+Servo ext5;
+Servo ext6;
 
 Motors mot; // initialize motors
 
@@ -46,8 +48,7 @@ float thr_alpha = 0.98;
 float str_alpha = 0.96;
 
 // Radio channel values mapped into useful numbers
-float thr, str, ext1float, ext2float, ext3float, ext4float;
-int led2;
+float thr, str, ext1float, ext2float, ext3float, ext4float, ext5float, ext6float;
 
 //LED array values
 // led_array[8] = {orange, red, yellow, green, blue, red(rgb), green(rgb), blue(rgb)}
@@ -62,23 +63,23 @@ unsigned long loop_timer = 0; // timer for main loop execution
 // Setup function that runs once as the ESP starts up
 // ===================================================================================================
 void setup() {
-  // Setup the LED headlight/spotlight control, also in the motors library
-  mot.ledc_init(LEDC_CHANNEL_1, LED2_IO, 12, 15625);
-  ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, 0); // headlights are off
-  ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1); // apply the duty cycle
 
   Serial.begin(115200);     // debug info
 
   rxsr.begin(RXD2, TXD2, true, 100000); // optional parameters for ESP32: RX pin, TX pin, inverse mode, baudrate
 
-  ext1.attach(GIMBAL_SERVO_IO); // attaches servo pin
-  ext1.writeMicroseconds(0); // default position
-  ext2.attach(GIMBAL_SERVO2_IO); // attaches servo pin
-  ext2.writeMicroseconds(0); // default position
-  ext3.attach(CAM_CTRL_IO); // attaches servo pin
-  ext3.writeMicroseconds(0); // default position
-  ext4.attach(VTX_CTRL_IO); // attaches servo pin
-  ext4.writeMicroseconds(0); // default position
+  ext1.attach(GIMBAL_SERVO_IO);   // attaches servo pin
+  ext2.attach(GIMBAL_SERVO2_IO);  // sevo2
+  ext3.attach(CAM_CTRL_IO);       // cam control
+  ext4.attach(VTX_CTRL_IO);       // vtx control
+  ext5.attach(DB_SDA_IO);         // i2c sda
+  ext6.attach(DB_SCL_IO);         // i2c scl
+  ext1.writeMicroseconds(1000);   // off positon
+  ext2.writeMicroseconds(1000);
+  ext3.writeMicroseconds(1000);
+  ext4.writeMicroseconds(1000); 
+  ext5.writeMicroseconds(1000);
+  ext6.writeMicroseconds(1000);
 
   pinMode(LEDARRAY_CLK_IO, OUTPUT); // on board indicator LEDs
   pinMode(LEDARRAY_DATA_IO, OUTPUT);
@@ -109,17 +110,12 @@ void loop() {
   thr = constrain(map(ch1, LOW_VAL, HIGH_VAL, -105, 105), -100, 100); // throttle
   str = constrain(map(ch2, LOW_VAL, HIGH_VAL, -105, 105), -100, 100); // steering 
   // headlight toggle
-  ext1float = constrain(map(ch6, LOW_VAL, HIGH_VAL, 950, 2050), 1000, 2000); // external control 1
-  ext2float = constrain(map(ch7, LOW_VAL, HIGH_VAL, 950, 2050), 1000, 2000); // external control 2
-  ext3float = constrain(map(ch8, LOW_VAL, HIGH_VAL, 950, 2050), 1000, 2000); // external control 1
-  ext4float = constrain(map(ch9, LOW_VAL, HIGH_VAL, 950, 2050), 1000, 2000); // external control 2
-
-  //logarithmic lighting
-  led2 = log_lighting(constrain(map(ch5, LOW_VAL, HIGH_VAL, 172, 1811), 172, 1811));
-
-  // control the LEDs
-  ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, led2); // set the duty cycle for led channel 2
-  ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1); // apply the duty cycle
+  ext1float = constrain(map(ch5, LOW_VAL, HIGH_VAL, 950, 2050), 1000, 2000); // external control 1
+  ext2float = constrain(map(ch6, LOW_VAL, HIGH_VAL, 950, 2050), 1000, 2000); // external control 2
+  ext3float = constrain(map(ch7, LOW_VAL, HIGH_VAL, 950, 2050), 1000, 2000); // external control 3
+  ext4float = constrain(map(ch8, LOW_VAL, HIGH_VAL, 950, 2050), 1000, 2000); // external control 4
+  ext5float = constrain(map(ch9, LOW_VAL, HIGH_VAL, 950, 2050), 1000, 2000); // external control 5
+  ext6float = constrain(map(ch10, LOW_VAL, HIGH_VAL, 950, 2050), 1000, 2000); // external control 6
 
   // smooth out throttle, steering, and servo
   thr_smoothed = (thr_smoothed * thr_alpha) + (thr * (1 - thr_alpha));
@@ -128,11 +124,13 @@ void loop() {
   // ACTION TAKEN BASED VALUES / WRITE TO OUTPUTS
   // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-  // set the gimbal location
+  // set the RCPWM for each ext channel
   ext1.writeMicroseconds(ext1float);
   ext2.writeMicroseconds(ext2float);
   ext3.writeMicroseconds(ext3float);
   ext4.writeMicroseconds(ext4float);
+  ext5.writeMicroseconds(ext5float);
+  ext6.writeMicroseconds(ext6float);
 
   // if fault from motor drivers turn on yellow led
   if(mot.fault == 0) led_array[0] = 1;
@@ -165,14 +163,6 @@ void ledarray_set(int leds[]){
     digitalWrite(LEDARRAY_DATA_IO, leds[i]);
     digitalWrite(LEDARRAY_CLK_IO, HIGH);
   }
-}
-
-// Function to apply logarithmic lighting to the LEDs
-int log_lighting(int ch){
-  if(ch < 173) return 0; // cut off anything below this point, don't waste current when LEDs aren't on
-  float temp = ch * 0.00295; //lot of magic values specifically for SBUS
-  temp = (exp(temp) + 25 + 0.154 * ch) * 8;
-  return constrain(temp, 0, 4096);
 }
 
 // Function to read values from the receiver 

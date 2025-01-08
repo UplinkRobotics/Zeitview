@@ -35,9 +35,16 @@ Motors mot; // initialize motors
 // Radio channel integers - raw values from the radio
 int ch1 = DEFAULT; // set to default value so crawler doesnt move on startup
 int ch2 = DEFAULT; 
-int ch3 = LOW_VAL;
-int ch4 = LOW_VAL;
-int ch5, ch6, ch7, ch8, ch9, ch10, ch11, ch12;
+int ch3 = DEFAULT;
+int ch4 = DEFAULT;
+int ch5 = LOW_VAL;
+int ch6 = LOW_VAL;
+int ch7 = LOW_VAL;
+int ch8 = LOW_VAL;
+int ch9 = LOW_VAL;
+int ch10 = LOW_VAL;
+int ch11 = LOW_VAL;
+int ch12 = LOW_VAL;
 
 // Smoothed values to reduce current draw and make operation smoother
 float thr_smoothed = 0;
@@ -63,6 +70,8 @@ unsigned long loop_timer = 0; // timer for main loop execution
 // Setup function that runs once as the ESP starts up
 // ===================================================================================================
 void setup() {
+  // Setup the LED headlight/spotlight control, also in the motors library
+  mot.ledc_init(LEDC_CHANNEL_1, LED2_IO, 12, 15625); // important ledc configuration for motors/LEDs
 
   Serial.begin(115200);     // debug info
 
@@ -186,8 +195,8 @@ void read_receiver(int *ch1, int *ch2, int *ch3, int *ch4, int *ch5, int *ch6, i
     if(failSafe || lostFrame){
       *ch1 = DEFAULT;
       *ch2 = DEFAULT;
-      *ch3 = LOW_VAL;
-      *ch4 = LOW_VAL;
+      *ch3 = DEFAULT;
+      *ch4 = DEFAULT;
       *ch5 = LOW_VAL;
       *ch6 = LOW_VAL; 
       *ch7 = LOW_VAL; 
